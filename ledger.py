@@ -11,6 +11,8 @@ Desc: This project aims to provide a convenient way to keep track of accounts
 
 """
 
+from copy import deepcopy
+
 # set up scoring/payout system
 SCORING = [8, 16, 32, 48, 64, 96, 128, 256]
 
@@ -19,8 +21,6 @@ SCORING = [8, 16, 32, 48, 64, 96, 128, 256]
 def get_option():
 	while True:
 		# TODO: extra features 
-				# add extra players,
-				# remove old players,
 				# manually change accounts,
 				# history of rounds,
 				# save in external file
@@ -28,9 +28,11 @@ def get_option():
 			1) record new round
 			2) undo last change
 			3) check current scores
-			4) end game
-			>> """)
-		if choice not in "1 2 3 4".split():
+			4) add new player
+			5) remove player
+			6) end game
+			>> """)  # can't make int in case user entered char
+		if choice not in "1 2 3 4 5 6".split():
 			print "That's not a valid choice. Please pick a number."
 		else:
 			return int(choice)
@@ -87,23 +89,34 @@ def get_score():
 
 
 # initialize dictionary of player:money pairs
-ledger = {"Au": 0, "Na": 0, "Nic": 0, "Ra": 0, "Pa": 0}
-# TODO: allow user to enter names of players 1 by 1
-# num_players = int(raw_input("How many people are playing? >> "))
-# for i in range(num_players):
-# 	ledger # add players by name, 1 at a time
-player_list = ledger.keys()
+#ledger = {"Au": 0, "Na": 0, "Nic": 0, "Ra": 0, "Pa": 0}
+ledger = {}
+player_list = []
+num_players = int(raw_input("How many people are playing? >> "))
+i = 0
+while i < num_players:
+	name = raw_input("Name of player %d >> " % (i+1))
+	if name in player_list:
+		print "Sorry, that name is already taken."
+	else:
+		ledger[name] = 0
+		player_list.append(name)
+		i += 1
 
 
-# copy current ledger in case undo is needed
+# copy current ledger and player_list in case undo is needed
 old_ledger = ledger.copy()
+old_player_list = deepcopy(player_list)
+
+# flags used in undo
+last_move = 0  # 1: added player, 2: removed player, 0: else
+removed_account = ["", 0]
 
 # main loop
 while True:
 	choice = get_option()  # choice is 1, 2, or 3
 
 	if choice == 1:  # record new round
-
 		old_ledger = ledger.copy()  # copy current ledger in case undo is needed
 
 		winner = get_player()
@@ -134,16 +147,33 @@ while True:
 		print "The new ledger is "
 		print ledger
 
+		last_move = 0
 
 	elif choice == 2:  # undo last move
+
 		check = raw_input("Are you sure you want to undo the last move? >> ")
 		if "y" in check.lower():
 			print "Undoing last move"
 			ledger = old_ledger.copy()
 			print "The ledger is now"
 			print ledger
+
+			if last_move == 1:
+				name = player_list[-1]
+				print "Removing player %s." % name  # undo adding of player
+				# ledger updated already, no need to del account again
+				player_list = player_list[:-1]  # remove last entry
+			elif last_move == 2:
+				name = removed_account[0]
+				money = removed_account[1]
+				print "Restoring player %s." % name
+				player_list.append(name)
+				ledger[name] = money  # TODO: does this affect recording on external file?
+
+			last_move = 0
 		else:
 			print "Undo cancelled"
+
 
 	elif choice == 3:  # check current score
 		# TODO: better way to do this?
@@ -155,11 +185,58 @@ while True:
 			else:
 				print "%s: $%d." % (player, money)
 
-	else:  # end game
-		print ledger
-		print "Thanks for playing!"
-		exit(0)
+		# doesn't change last_move flag
 
+	elif choice == 4:  # add new player
+		added = False
+		while not added:
+			new_player = raw_input("Name of new player? (0 to cancel) >> ").title()  # capitalize first letter
+			# TODO: any other criteria for name?
+			if new_player == "0":
+				print "Cancelled."
+				added = True
+			elif new_player in player_list:
+				print "Sorry, that name is already taken."
+			else:
+				old_ledger = ledger.copy()  # copy current ledger in case undo is needed
+				old_player_list = deepcopy(player_list)  # deep copy of player_list in case undo
+				print "Adding %s to the ledger." % new_player
+				player_list.append(new_player)
+				print player_list
+				ledger[new_player] = 0  # creates new account, starting bal $0
+				added = True
+				last_move = 1
+
+	elif choice == 5:  # removed player
+		removed = False
+		while not removed:
+			old_player = raw_input("Name of player to remove? (0 to cancel) >> ").title()  # capitalize first letter
+			if old_player == "0":
+				print "Cancelled."
+				removed = True
+			elif old_player not in player_list:
+				print "Sorry, could not find that player.\nChoose one of the following:"
+				for name in player_list:
+					print name,
+				print ""
+			else:
+				old_ledger = ledger.copy()  # copy current ledger in case undo is needed
+				old_player_list = deepcopy(player_list)  # deep copy of player_list in case undo
+				removed_account = [old_player, ledger[old_player]]  # save account in case undo
+				print "Removing %s from the ledger." % old_player
+				player_list.remove(old_player)  # TODO: will this affect recording on external file?
+				del ledger[old_player]
+				removed = True
+				last_move = 2
+
+	else:  # end game
+		check = raw_input("Are you sure you want to end the game? >> ")
+		if "y" in check.lower():
+			print ledger
+			print "Thanks for playing!"
+			exit(0)
+		else:
+			print "Cancelled."
 
 
 
